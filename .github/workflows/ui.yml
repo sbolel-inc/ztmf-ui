@@ -1,0 +1,51 @@
+name: UI
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.11.0'
+
+      - name: Run install
+        uses: borales/actions-yarn@v4
+        with:
+          cmd: install # will run `yarn install` command
+
+      - name: Run Linting and fixing
+        uses: borales/actions-yarn@v4
+        with:
+          cmd: fix:js
+
+      - name: Build dev bundle
+        uses: borales/actions-yarn@v4
+        with:
+          cmd: build:dev # will run `yarn build:dev` command
+
+      - name: Get AWS Creds
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.ROLEARN }}
+          role-duration-seconds: 900
+          aws-region: us-east-1
+
+      - name: AWS Sync
+        run: aws s3 sync ./dist s3://${{ secrets.BUCKET_NAME }}/ --delete 
+          
