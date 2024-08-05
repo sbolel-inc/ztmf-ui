@@ -8,6 +8,8 @@ import { UsaBanner } from '@cmsgov/design-system'
 import { jwtDecode } from 'jwt-decode'
 import logo from '../../assets/icons/logo.svg'
 import AccountCircleIcon from '@mui/icons-material/AccountCircle'
+import 'core-js/stable/atob'
+
 /**
  * Component that renders the contents of the Dashboard view.
  * @returns {JSX.Element} Component that renders the dashboard contents.
@@ -18,9 +20,22 @@ interface LoaderData {
   preferred_username?: string
   groups?: string[]
 }
+const emptyUser: LoaderData = {
+  email: '',
+  name: '',
+  preferred_username: '',
+  groups: [],
+}
+interface PromiseType {
+  ok: boolean
+  response: string
+}
 const Title: React.FC = (): JSX.Element => {
-  const loaderData = useLoaderData() as string
-  const userInfo = jwtDecode(loaderData) as LoaderData
+  const loaderData = useLoaderData() as PromiseType
+  const userInfo: LoaderData = !loaderData.ok
+    ? emptyUser
+    : (jwtDecode(loaderData.response as string) as LoaderData)
+
   return (
     <>
       <UsaBanner />
