@@ -1,23 +1,24 @@
 {
-  "name": "template-vite-react",
+  "name": "ztmf-ui",
   "private": true,
   "version": "0.0.0-semantic-release",
   "license": "UNLICENSED",
-  "description": "Boilerplate for React + Vite project",
-  "homepage": "https://github.com/aquia-inc/template-vite-react#readme",
+  "description": "CMS ZTMF UI Application",
+  "homepage": "https://github.com/CMS-Enterprise/ztmf-ui",
   "bugs": {
-    "url": "https://github.com/aquia-inc/template-vite-react/issues"
+    "url": "https://github.com/CMS-Enterprise/ztmf-ui/issues"
   },
-  "author": "Aquia, Inc.",
+  "author": "Noblis & Aquia, Inc.",
   "contributors": [
+    "Alex Tran",
     "Sinan Bolel"
   ],
   "type": "module",
-  "packageManager": "yarn@4.0.2",
+  "packageManager": "yarn@4.4.0",
   "engines": {
-    "node": "20.11.0",
+    "node": "20",
     "npm": "please-use-yarn",
-    "yarn": "4.0.2"
+    "yarn": "4.4.0"
   },
   "scripts": {
     "start": "yarn run dev",
