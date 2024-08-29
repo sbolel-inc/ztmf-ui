@@ -10,19 +10,6 @@ import router from '@/router/router'
 import { SIGN_IN_GREETING } from '@/locales/en'
 import '@/sass/style.scss'
 import onPerfEntry from './utils/onPerfEntry'
-import {
-  ApolloProvider,
-  ApolloClient,
-  InMemoryCache,
-  HttpLink,
-} from '@apollo/client'
-
-export const client = new ApolloClient({
-  link: new HttpLink({
-    uri: import.meta.env.GRAPH_URI,
-  }),
-  cache: new InMemoryCache(),
-})
 
 // IIFE that initializes the root node and renders the application.
 ;(async function () {
@@ -32,16 +19,14 @@ export const client = new ApolloClient({
   // create the React root node and render the application
   ReactDOMClient.createRoot(rootElement).render(
     <React.StrictMode>
-      <ApolloProvider client={client}>
-        <RouterProvider router={router} />
-      </ApolloProvider>
+      <RouterProvider router={router} />
     </React.StrictMode>
   )
 
   // if NODE_ENV is production, return early. otherwise, run dev tools.
   if (process.env.NODE_ENV === 'development') {
     console.debug(SIGN_IN_GREETING, CONFIG)
-
+    // console.log(`Running in environment: ${process.env.NODE_ENV}`)
     // enable React performance measurement tools.
     // see https://create-react-app.dev/docs/measuring-performance/
     const { onCLS, onFID, onFCP, onINP, onLCP, onTTFB } = await import(
