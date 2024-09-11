@@ -388,8 +388,15 @@ export default function QuestionnareModal({
               ))}
             </Box>
             {loadingQuestion ? (
-              <Box sx={{ display: 'flex' }}>
-                <CircularProgress />
+              <Box
+                flex={0.7}
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <CircularProgress size={80} />
               </Box>
             ) : (
               <Box
@@ -423,7 +430,6 @@ export default function QuestionnareModal({
                 />
                 <Box
                   position="relative"
-                  // bottom="10px"
                   display="flex"
                   width="100%"
                   justifyContent={'space-between'}
