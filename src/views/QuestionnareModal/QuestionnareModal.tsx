@@ -111,16 +111,14 @@ export default function QuestionnareModal({
           datacallid: 2,
         })
         .then((res) => {
-          if (res.status != 200) {
-            console.error('Error updating score')
+          if (res.status != 204) {
+            return console.error('Error updating score')
           }
+          fetchQuestionScores(Number(system?.fismasystemid), setQuestionScores)
+          setLoadingQuestion(false)
         })
         .catch((error) => {
           console.error('Error updating score:', error)
-        })
-        .finally(() => {
-          fetchQuestionScores(Number(system?.fismasystemid), setQuestionScores)
-          setLoadingQuestion(false)
         })
     } else {
       axiosInstance
@@ -132,13 +130,11 @@ export default function QuestionnareModal({
         })
         .then(() => {
           console.log('Created score')
+          fetchQuestionScores(Number(system?.fismasystemid), setQuestionScores)
+          setLoadingQuestion(false)
         })
         .catch((error) => {
           console.error('Error creating score:', error)
-        })
-        .finally(() => {
-          fetchQuestionScores(Number(system?.fismasystemid), setQuestionScores)
-          setLoadingQuestion(false)
         })
     }
     let nextCategoryIndex = activeCategoryIndex
@@ -164,7 +160,6 @@ export default function QuestionnareModal({
   const handleQuestionnareBack = () => {
     let prevCategoryIndex = activeCategoryIndex
     let prevStepIndex = activeStepIndex - 1
-
     if (prevStepIndex < 0) {
       prevCategoryIndex -= 1
       if (prevCategoryIndex >= 0) {
@@ -202,6 +197,9 @@ export default function QuestionnareModal({
     setNotes('')
     onClose()
   }
+  const handleQuestionChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSelectQuestionOption(Number(event.target.value))
+  }
   React.useEffect(() => {
     if (open && system) {
       axiosInstance
@@ -209,20 +207,21 @@ export default function QuestionnareModal({
         .then((response) => {
           const data = response.data.data
           const organizedData: Record<string, FismaQuestion[]> = {}
+          const pillarOrder: Record<string, number> = {}
           data.forEach((question: FismaQuestion) => {
-            if (!organizedData[question.pillar]) {
-              organizedData[question.pillar] = []
+            if (!organizedData[question.pillar.pillar]) {
+              organizedData[question.pillar.pillar] = []
+              pillarOrder[question.pillar.pillar] = question.pillar.order
             }
-            organizedData[question.pillar].push(question)
+            organizedData[question.pillar.pillar].push(question)
           })
-
-          // Convert the organized data into categories format
-          const categoriesData: Category[] = Object.keys(organizedData).map(
-            (pillar) => ({
-              name: pillar,
-              steps: organizedData[pillar],
-            })
+          const sortedPillars = Object.keys(organizedData).sort(
+            (a, b) => pillarOrder[a] - pillarOrder[b]
           )
+          const categoriesData: Category[] = sortedPillars.map((pillar) => ({
+            name: pillar,
+            steps: organizedData[pillar],
+          }))
 
           setCategories(categoriesData)
           if (data.length > 0) {
@@ -248,36 +247,33 @@ export default function QuestionnareModal({
         })
     }
   }, [open, system])
-  const handleQuestionChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setSelectQuestionOption(Number(event.target.value))
-  }
   React.useEffect(() => {
-    if (questionId && questionScores) {
-      try {
-        axiosInstance.get(`functions/${questionId}/options`).then((res) => {
-          setOptions(res.data.data)
-          let isValidOption: boolean = false
-          let funcOptId: number = 0
-          res.data.data.forEach((item: QuestionOption) => {
-            if (item.functionoptionid in questionScores) {
-              isValidOption = true
-              funcOptId = item.functionoptionid
-            }
-          })
-          if (!isValidOption) {
-            setSelectQuestionOption(0)
-            setScoreId(0)
-            setNotes('')
-          } else {
-            setSelectQuestionOption(funcOptId)
-            setScoreId(questionScores[funcOptId].scoreid)
-            setNotes(questionScores[funcOptId].notes)
+    try {
+      axiosInstance.get(`functions/${questionId}/options`).then((res) => {
+        setOptions(res.data.data)
+        let isValidOption: boolean = false
+        let funcOptId: number = 0
+        res.data.data.forEach((item: QuestionOption) => {
+          if (item.functionoptionid in questionScores) {
+            isValidOption = true
+            funcOptId = item.functionoptionid
           }
-          setLoadingQuestion(false)
         })
-      } catch (error) {
-        console.error('Error fetching data:', error)
-      }
+        if (!isValidOption) {
+          setSelectQuestionOption(0)
+          setScoreId(0)
+          setNotes('')
+        } else {
+          const id = questionScores[funcOptId].scoreid
+          const notes = questionScores[funcOptId].notes
+          setSelectQuestionOption(funcOptId)
+          setScoreId(id)
+          setNotes(notes)
+        }
+        setLoadingQuestion(false)
+      })
+    } catch (error) {
+      console.error('Error fetching data:', error)
     }
   }, [questionId, questionScores])
   const renderRadioGroup = (options: QuestionOption[]) => {
@@ -326,7 +322,9 @@ export default function QuestionnareModal({
               {categories.map((category, categoryIndex) => (
                 <Box key={category.name} marginBottom="16px">
                   <Typography variant="h6" align="center">
-                    {category.name}
+                    {category.name === 'CrossCutting'
+                      ? 'Cross Cutting'
+                      : category.name}
                   </Typography>
                   <Box>
                     {category.steps.map((step, stepIndex) => (
