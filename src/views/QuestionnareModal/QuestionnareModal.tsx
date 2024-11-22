@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Button as CmsButton } from '@cmsgov/design-system'
 import {
   Box,
@@ -25,7 +26,11 @@ import {
 import axiosInstance from '@/axiosConfig'
 import CircularProgress from '@mui/material/CircularProgress'
 import { useSnackbar } from 'notistack'
-
+import { Routes } from '@/router/constants'
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
+import IconButton from '@mui/material/IconButton'
+import Tooltip from '@mui/material/Tooltip'
+import { ERROR_MESSAGES } from '@/constants'
 const CssTextField = styled(TextField)({
   '& label.Mui-focused': {
     color: 'rgb(13, 36, 153)',
@@ -63,13 +68,34 @@ export default function QuestionnareModal({
   onClose,
   system,
 }: SystemDetailsModalProps) {
+  const checkValidResponse = (status: number) => {
+    if (status !== 200 && status.toString()[0] === '4') {
+      navigate(Routes.SIGNIN, {
+        replace: true,
+        state: {
+          message: ERROR_MESSAGES.notSaved,
+        },
+      })
+    }
+    return
+  }
+  const routeToSignIn = () => {
+    navigate(Routes.SIGNIN, {
+      replace: true,
+      state: {
+        message: ERROR_MESSAGES.expired,
+      },
+    })
+  }
   const { enqueueSnackbar } = useSnackbar()
+  const navigate = useNavigate()
   const [activeCategoryIndex, setActiveCategoryIndex] =
     React.useState<number>(0)
   const [activeStepIndex, setActiveStepIndex] = React.useState<number>(0)
   const [questionId, setQuestionId] = React.useState<number | null>(null)
   const [categories, setCategories] = React.useState<Category[]>([])
   const [options, setOptions] = React.useState<QuestionOption[]>([])
+  const [datacallID, setDatacallID] = React.useState<number>(0)
   const [loadingQuestion, setLoadingQuestion] = React.useState<boolean>(true)
   const [questionScores, setQuestionScores] = React.useState<questionScoreMap>(
     {}
@@ -87,8 +113,9 @@ export default function QuestionnareModal({
   ) => {
     try {
       const response = await axiosInstance.get(
-        `scores?datacallid=2&fismasystemid=${systemId}`
+        `scores?datacallid=${datacallID}&fismasystemid=${systemId}`
       )
+      checkValidResponse(response.status)
       const hashTable: questionScoreMap = Object.assign(
         {},
         ...response.data.data.map((item: QuestionScores) => ({
@@ -98,9 +125,9 @@ export default function QuestionnareModal({
       setQuestionScores(hashTable)
     } catch (error) {
       console.error('Error fetching question scores:', error)
+      routeToSignIn()
     }
   }
-
   const handleQuestionnareNext = () => {
     // TODO: datacallid is hardcoded to 2, need to make it dynamic
     setLoadingQuestion(true)
@@ -113,9 +140,7 @@ export default function QuestionnareModal({
           datacallid: 2,
         })
         .then((res) => {
-          if (res.status != 204) {
-            return console.error('Error updating score')
-          }
+          checkValidResponse(res.status)
           enqueueSnackbar(`Saved`, {
             variant: 'success',
             anchorOrigin: {
@@ -128,6 +153,7 @@ export default function QuestionnareModal({
         })
         .catch((error) => {
           console.error('Error updating score:', error)
+          routeToSignIn()
         })
     } else {
       axiosInstance
@@ -137,13 +163,14 @@ export default function QuestionnareModal({
           functionoptionid: selectQuestionOption,
           datacallid: 2,
         })
-        .then(() => {
-          console.log('Created score')
+        .then((res) => {
+          checkValidResponse(res.status)
           fetchQuestionScores(Number(system?.fismasystemid), setQuestionScores)
           setLoadingQuestion(false)
         })
         .catch((error) => {
-          console.error('Error creating score:', error)
+          console.error('Error posting score:', error)
+          routeToSignIn()
         })
     }
     let nextCategoryIndex = activeCategoryIndex
@@ -225,51 +252,118 @@ export default function QuestionnareModal({
   }
   React.useEffect(() => {
     if (open && system) {
-      axiosInstance
-        .get(`/fismasystems/${system.fismasystemid}/questions`)
-        .then((response) => {
-          const data = response.data.data
-          const organizedData: Record<string, FismaQuestion[]> = {}
-          const pillarOrder: Record<string, number> = {}
-          data.forEach((question: FismaQuestion) => {
-            if (!organizedData[question.pillar.pillar]) {
-              organizedData[question.pillar.pillar] = []
-              pillarOrder[question.pillar.pillar] = question.pillar.order
+      const fetchData = async () => {
+        try {
+          const datacall = await axiosInstance.get(`/datacalls`).then((res) => {
+            if (res.status !== 200 && res.status.toString()[0] === '4') {
+              navigate(Routes.SIGNIN, {
+                replace: true,
+                state: {
+                  message: ERROR_MESSAGES.expired,
+                },
+              })
             }
-            organizedData[question.pillar.pillar].push(question)
+            return res.data.data
           })
-          const sortedPillars = Object.keys(organizedData).sort(
-            (a, b) => pillarOrder[a] - pillarOrder[b]
-          )
-          const categoriesData: Category[] = sortedPillars.map((pillar) => ({
-            name: pillar,
-            steps: organizedData[pillar],
-          }))
-
-          setCategories(categoriesData)
-          if (data.length > 0) {
-            setQuestionId(categoriesData[0]['steps'][0].function.functionid)
+          let latestDataCallId = -Infinity
+          for (let i = 0; i < datacall.length; i++) {
+            latestDataCallId = Math.max(
+              latestDataCallId,
+              datacall[i].datacallid
+            )
           }
-        })
-        .catch((error) => {
+          setDatacallID(latestDataCallId)
+          await axiosInstance
+            .get(`/fismasystems/${system.fismasystemid}/questions`)
+            .then((response) => {
+              if (
+                response.status !== 200 &&
+                response.status.toString()[0] === '4'
+              ) {
+                navigate(Routes.SIGNIN, {
+                  replace: true,
+                  state: {
+                    message: ERROR_MESSAGES.expired,
+                  },
+                })
+              }
+              const data = response.data.data
+              const organizedData: Record<string, FismaQuestion[]> = {}
+              const pillarOrder: Record<string, number> = {}
+              data.forEach((question: FismaQuestion) => {
+                if (!organizedData[question.pillar.pillar]) {
+                  organizedData[question.pillar.pillar] = []
+                  pillarOrder[question.pillar.pillar] = question.pillar.order
+                }
+                organizedData[question.pillar.pillar].push(question)
+              })
+              const sortedPillars = Object.keys(organizedData).sort(
+                (a, b) => pillarOrder[a] - pillarOrder[b]
+              )
+              const categoriesData: Category[] = sortedPillars.map(
+                (pillar) => ({
+                  name: pillar,
+                  steps: organizedData[pillar],
+                })
+              )
+
+              setCategories(categoriesData)
+              if (data.length > 0) {
+                setQuestionId(categoriesData[0]['steps'][0].function.functionid)
+              }
+            })
+            .catch((error) => {
+              console.error('Error fetching data:', error)
+              navigate(Routes.SIGNIN, {
+                replace: true,
+                state: {
+                  message: ERROR_MESSAGES.error,
+                },
+              })
+            })
+          await axiosInstance
+            .get(
+              `scores?datacallid=${latestDataCallId}&fismasystemid=${system.fismasystemid}`
+            )
+            .then((res) => {
+              if (res.status !== 200 && res.status.toString()[0] === '4') {
+                navigate(Routes.SIGNIN, {
+                  replace: true,
+                  state: {
+                    message: ERROR_MESSAGES.expired,
+                  },
+                })
+              }
+              const hashTable: questionScoreMap = Object.assign(
+                {},
+                ...res.data.data.map((item: QuestionScores) => ({
+                  [item.functionoptionid]: item,
+                }))
+              )
+              setQuestionScores(hashTable)
+            })
+            .catch((error) => {
+              console.error('Error fetching ´question scores:', error)
+              navigate(Routes.SIGNIN, {
+                replace: true,
+                state: {
+                  message: ERROR_MESSAGES.error,
+                },
+              })
+            })
+        } catch (error) {
           console.error('Error fetching data:', error)
-        })
-      axiosInstance
-        .get(`scores?datacallid=2&fismasystemid=${system.fismasystemid}`)
-        .then((res) => {
-          const hashTable: questionScoreMap = Object.assign(
-            {},
-            ...res.data.data.map((item: QuestionScores) => ({
-              [item.functionoptionid]: item,
-            }))
-          )
-          setQuestionScores(hashTable)
-        })
-        .catch((error) => {
-          console.error('Error fetching question scores:', error)
-        })
+          navigate(Routes.SIGNIN, {
+            replace: true,
+            state: {
+              message: ERROR_MESSAGES.expired,
+            },
+          })
+        }
+      }
+      fetchData()
     }
-  }, [open, system])
+  }, [open, system, navigate])
   React.useEffect(() => {
     if (questionId) {
       try {
@@ -277,6 +371,14 @@ export default function QuestionnareModal({
           setOptions(res.data.data)
           let isValidOption: boolean = false
           let funcOptId: number = 0
+          if (res.status !== 200 && res.status.toString()[0] === '4') {
+            navigate(Routes.SIGNIN, {
+              replace: true,
+              state: {
+                message: ERROR_MESSAGES.expired,
+              },
+            })
+          }
           res.data.data.forEach((item: QuestionOption) => {
             if (item.functionoptionid in questionScores) {
               isValidOption = true
@@ -298,9 +400,15 @@ export default function QuestionnareModal({
         })
       } catch (error) {
         console.error('Error fetching data:', error)
+        navigate(Routes.SIGNIN, {
+          replace: true,
+          state: {
+            message: ERROR_MESSAGES.error,
+          },
+        })
       }
     }
-  }, [questionId, questionScores])
+  }, [questionId, questionScores, navigate])
   const renderRadioGroup = (options: QuestionOption[]) => {
     return (
       <FormControl component="fieldset">
@@ -352,57 +460,71 @@ export default function QuestionnareModal({
                       : category.name}
                   </Typography>
                   <Box>
-                    {category.steps.map((step, stepIndex) => (
-                      <Box
-                        key={
-                          step.pillar +
-                          '_' +
-                          step.questionid +
-                          '_' +
-                          step.function.functionid
-                        }
-                        bgcolor={
-                          activeCategoryIndex === categoryIndex &&
-                          activeStepIndex === stepIndex
-                            ? 'rgb(13, 36, 153)'
-                            : 'grey.300'
-                        }
-                        color={
-                          activeCategoryIndex === categoryIndex &&
-                          activeStepIndex === stepIndex
-                            ? 'primary.contrastText'
-                            : 'text.primary'
-                        }
-                        borderRadius="4px"
-                        boxShadow={
-                          activeCategoryIndex === categoryIndex &&
-                          activeStepIndex === stepIndex
-                            ? 2
-                            : 1
-                        }
-                        sx={{
-                          p: 1,
-                          m: 1,
-                          cursor: 'pointer',
-                          width: '14vw',
-                          textAlign: 'center',
-                        }}
-                        onClick={() => {
-                          if (
-                            activeCategoryIndex !== categoryIndex ||
-                            activeStepIndex !== stepIndex
-                          ) {
-                            handleStepClick(
-                              categoryIndex,
-                              stepIndex,
-                              step.function.functionid
-                            )
+                    {category.steps.map((step, stepIndex) => {
+                      const text = addSpace(step.function.function)
+                      const fontSize = text.length > 33 ? '0.9rem' : '1rem'
+                      return (
+                        <Box
+                          key={
+                            step.pillar +
+                            '_' +
+                            step.questionid +
+                            '_' +
+                            step.function.functionid
                           }
-                        }}
-                      >
-                        {addSpace(step.function.function)}
-                      </Box>
-                    ))}
+                          bgcolor={
+                            activeCategoryIndex === categoryIndex &&
+                            activeStepIndex === stepIndex
+                              ? 'rgb(13, 36, 153)'
+                              : 'grey.300'
+                          }
+                          color={
+                            activeCategoryIndex === categoryIndex &&
+                            activeStepIndex === stepIndex
+                              ? 'primary.contrastText'
+                              : 'text.primary'
+                          }
+                          borderRadius="4px"
+                          boxShadow={
+                            activeCategoryIndex === categoryIndex &&
+                            activeStepIndex === stepIndex
+                              ? 2
+                              : 1
+                          }
+                          sx={{
+                            p: 1,
+                            m: 1,
+                            cursor: 'pointer',
+                            width: '100%',
+                            textAlign: 'center',
+                            // whiteSpace: 'nowrap',
+                            fontSize: fontSize,
+                          }}
+                          onClick={() => {
+                            if (
+                              activeCategoryIndex !== categoryIndex ||
+                              activeStepIndex !== stepIndex
+                            ) {
+                              handleStepClick(
+                                categoryIndex,
+                                stepIndex,
+                                step.function.functionid
+                              )
+                            }
+                          }}
+                        >
+                          {text}
+                          <Tooltip
+                            title={step.function.description}
+                            placement="top-start"
+                          >
+                            <IconButton size="small">
+                              <InfoOutlinedIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                      )
+                    })}
                   </Box>
                 </Box>
               ))}
