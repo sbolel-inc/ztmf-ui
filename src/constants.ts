@@ -2,6 +2,7 @@
  * Application-wide constants
  * @module constants
  */
+import { permission } from 'process'
 import { userData } from './types'
 
 //* Application Strings
@@ -14,6 +15,8 @@ export const COPYRIGHT_LABEL = `Copyright © ${new Date()
 // * Configuration Constants
 export const DEFAULT_ALERT_TIMEOUT = 3000
 
+export const ROLES = ['ISSO', 'ISSM', 'ADMIN']
+
 export const ERROR_MESSAGES = {
   login: 'Please log in to continue.',
   expired: 'Your session has expired. Please log in again.',
@@ -21,6 +24,7 @@ export const ERROR_MESSAGES = {
     'Your changes were not saved. Your session may have expired. Please log in again.',
   error:
     'An error occurred. Please log in and try again. If the error persists, please contact support.',
+  permission: 'You do not have permission to do this action.',
 }
 export const EMPTY_USER: userData = {
   userid: '',

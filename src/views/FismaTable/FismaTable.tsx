@@ -9,6 +9,8 @@ import {
   GridFooter,
   GridRowId,
   useGridApiRef,
+  GridRowParams,
+  useGridApiContext,
 } from '@mui/x-data-grid'
 import Tooltip from '@mui/material/Tooltip'
 import { Box, IconButton } from '@mui/material'
@@ -26,13 +28,13 @@ import { ERROR_MESSAGES } from '../../constants'
 import EditIcon from '@mui/icons-material/Edit'
 import QuestionAnswerOutlinedIcon from '@mui/icons-material/QuestionAnswerOutlined'
 import { FismaTableProps } from '@/types'
-
 type selectedRowsType = GridRowId[]
 declare module '@mui/x-data-grid' {
   interface FooterPropsOverrides {
     selectedRows: selectedRowsType
     fismaSystems: FismaSystemType[]
     latestDataCallId: number
+    scores: Record<number, number>
   }
 }
 
@@ -40,67 +42,65 @@ export function CustomFooterSaveComponent(
   props: NonNullable<GridSlotsComponentsProps['footer']>
 ) {
   const [openSnackbar, setOpenSnackbar] = useState<boolean>(false)
+  const [snackBarSeverity, setSnackBarSeverity] = useState<
+    'success' | 'error' | 'warning' | 'info'
+  >('error')
+  const apiRef = useGridApiContext()
+  const [errorMessage, setErrorMessage] = useState<string>('')
   const navigate = useNavigate()
   const handleCloseSnackbar = () => {
     setOpenSnackbar(false)
   }
   const saveSystemAnswers = async () => {
-    if (props.selectedRows && props.selectedRows.length === 0) {
-      setOpenSnackbar(true)
-    } else {
-      let exportUrl = `/datacalls/${props.latestDataCallId}/export`
-      if (
-        props.selectedRows &&
-        props.fismaSystems &&
-        props.selectedRows.length < props.fismaSystems.length
-      ) {
-        exportUrl += '?'
-        let idString: string = ''
-        if (props.selectedRows) {
-          props.selectedRows.forEach((id, index) => {
-            idString += 'fsids=' + id
-            if (index < (props.selectedRows ?? []).length - 1) {
-              idString += '&'
-            }
-          })
-        }
-        exportUrl += idString
-      }
-      return await axiosInstance
-        .get(exportUrl, {
-          responseType: 'blob',
-        })
-        .then((response) => {
-          if (response.status !== 200) {
-            navigate(Routes.SIGNIN, {
-              replace: true,
-              state: {
-                message: ERROR_MESSAGES.expired,
-              },
-            })
+    let exportUrl = `/datacalls/${props.latestDataCallId}/export`
+    if (
+      props.selectedRows &&
+      props.fismaSystems &&
+      props.selectedRows.length < props.fismaSystems.length
+    ) {
+      exportUrl += '?'
+      let idString: string = ''
+      if (props.selectedRows) {
+        props.selectedRows.forEach((id, index) => {
+          idString += 'fsids=' + id
+          if (index < (props.selectedRows ?? []).length - 1) {
+            idString += '&'
           }
-          const [, filename] =
-            response.headers['content-disposition'].split('filename=')
-          const contentType = response.headers['content-type']
-          const data = new Blob([response.data], { type: contentType })
-          const url = window.URL.createObjectURL(data)
-          const tempLink = document.createElement('a')
-          tempLink.href = url
-          tempLink.setAttribute('download', filename)
-          tempLink.setAttribute('target', '_blank')
-          tempLink.click()
-          window.URL.revokeObjectURL(url)
         })
-        .catch((error) => {
-          console.error('Error saving system answers: ', error)
+      }
+      exportUrl += idString
+    }
+    return await axiosInstance
+      .get(exportUrl, {
+        responseType: 'blob',
+      })
+      .then((response) => {
+        const [, filename] =
+          response.headers['content-disposition'].split('filename=')
+        const contentType = response.headers['content-type']
+        const data = new Blob([response.data], { type: contentType })
+        const url = window.URL.createObjectURL(data)
+        const tempLink = document.createElement('a')
+        tempLink.href = url
+        tempLink.setAttribute('download', filename)
+        tempLink.setAttribute('target', '_blank')
+        tempLink.click()
+        window.URL.revokeObjectURL(url)
+      })
+      .catch((error) => {
+        if (error.status === 401 || error.status === 500) {
           navigate(Routes.SIGNIN, {
             replace: true,
             state: {
               message: ERROR_MESSAGES.error,
             },
           })
-        })
-    }
+        } else if (error.status === 403) {
+          setErrorMessage(ERROR_MESSAGES.permission)
+          setSnackBarSeverity('warning')
+          setOpenSnackbar(true)
+        }
+      })
   }
   return (
     <>
@@ -115,7 +115,11 @@ export function CustomFooterSaveComponent(
           }}
         >
           <Tooltip title="Save System Answers">
-            <IconButton sx={{ color: '#004297' }} onClick={saveSystemAnswers}>
+            <IconButton
+              sx={{ color: '#004297' }}
+              onClick={saveSystemAnswers}
+              disabled={apiRef.current.getSelectedRows().size === 0}
+            >
               <FileDownloadSharpIcon />
             </IconButton>
           </Tooltip>
@@ -125,8 +129,9 @@ export function CustomFooterSaveComponent(
       <CustomSnackbar
         open={openSnackbar}
         handleClose={handleCloseSnackbar}
-        severity="error"
-        text="No systems selected"
+        severity={snackBarSeverity}
+        text={errorMessage}
+        duration={4000}
       />
     </>
   )
@@ -266,7 +271,10 @@ export default function FismaTable({
               key={`question-${params.row.fismasystemid}`}
               label="View Questionnare"
               className="textPrimary"
-              onClick={() => handleOpenModal(params.row as FismaSystemType)}
+              onClick={(event) => {
+                event.stopPropagation()
+                handleOpenModal(params.row as FismaSystemType)
+              }}
               color="inherit"
             />
           </Tooltip>
@@ -276,9 +284,10 @@ export default function FismaTable({
               key={`edit-${params.row.fismasystemid}`}
               label="Edit"
               className="textPrimary"
-              onClick={(event) =>
+              onClick={(event) => {
+                event.stopPropagation()
                 handleEditOpenModal(event, params.row as FismaSystemType)
-              }
+              }}
               color="inherit"
             />
           )}
@@ -291,6 +300,9 @@ export default function FismaTable({
     <div style={{ height: 600, width: '100%' }}>
       <DataGrid
         rows={fismaSystems}
+        isRowSelectable={(params: GridRowParams) =>
+          params.row.fismasystemid in scores
+        }
         columns={columns}
         checkboxSelection
         apiRef={apiRef}
@@ -300,7 +312,7 @@ export default function FismaTable({
           setSelectedRows(selectedIDs)
         }}
         slotProps={{
-          footer: { selectedRows, fismaSystems, latestDataCallId },
+          footer: { selectedRows, fismaSystems, latestDataCallId, scores },
           filterPanel: {
             sx: {
               '& .MuiFormLabel-root': {
