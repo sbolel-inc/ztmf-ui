@@ -1,11 +1,13 @@
 import { FismaSystemType } from '@/types'
 import {
   DataGrid,
+  GridToolbar,
   GridColDef,
   GridFooterContainer,
   GridSlotsComponentsProps,
   GridRenderCellParams,
   GridActionsCellItem,
+  GridToolbarQuickFilter,
   GridFooter,
   GridRowId,
   useGridApiRef,
@@ -136,6 +138,37 @@ export function CustomFooterSaveComponent(
     </>
   )
 }
+
+function QuickSearchToolbar() {
+  return (
+    <Box
+      sx={{
+        py: 0.5,
+        pl: 1,
+      }}
+    >
+      <GridToolbarQuickFilter
+        debounceMs={250}
+        sx={{
+          // '& .MuiInputBase-root:before': {
+          //   borderBottomColor: '#5666b8',
+          //   borderBottomWidth: 2,
+          // },
+          '& .MuiInputBase-input::placeholder': {
+            color: '#404040', // Change placeholder color to red
+            opacity: 0.8, // Ensure it is fully visible (MUI reduces opacity by default)
+          },
+          '& .MuiInputBase-root:after': {
+            borderBottomColor: '#5666b8', // Changes the underline color when active
+          },
+          '& .MuiInputBase-root:hover:not(.Mui-disabled):before': {
+            borderBottomColor: '#5666b8', // Changes the underline color on hover
+          },
+        }}
+      />
+    </Box>
+  )
+}
 export default function FismaTable({
   scores,
   latestDataCallId,
@@ -179,6 +212,10 @@ export default function FismaTable({
       headerName: 'System Name',
       width: 430,
       hideable: false,
+    },
+    {
+      field: 'fismaacronym',
+      headerName: 'Acronym',
     },
     {
       field: 'issoemail',
@@ -312,6 +349,16 @@ export default function FismaTable({
           setSelectedRows(selectedIDs)
         }}
         slotProps={{
+          // toolbar: {
+          //   csvOptions: { disableToolbarButton: true },
+          //   printOptions: { disableToolbarButton: true },
+          //   showQuickFilter: true,
+          //   quickFilterProps: {
+          //     debounceMs: 250,
+          //     variant: 'outlined',
+          //     size: 'small',
+          //   },
+          // },
           footer: { selectedRows, fismaSystems, latestDataCallId, scores },
           filterPanel: {
             sx: {
@@ -322,9 +369,12 @@ export default function FismaTable({
           },
         }}
         slots={{
+          toolbar: QuickSearchToolbar,
           footer: CustomFooterSaveComponent,
         }}
+        disableColumnFilter
         disableColumnSelector
+        disableDensitySelector
         sx={{
           '& .MuiDataGrid-columnHeaders': {
             backgroundColor: '#004297',
