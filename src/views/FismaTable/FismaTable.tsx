@@ -1,7 +1,6 @@
 import { FismaSystemType } from '@/types'
 import {
   DataGrid,
-  GridToolbar,
   GridColDef,
   GridFooterContainer,
   GridSlotsComponentsProps,
@@ -25,10 +24,11 @@ import axiosInstance from '@/axiosConfig'
 import { useContextProp } from '../Title/Context'
 import { EMPTY_USER } from '../../constants'
 import { useNavigate } from 'react-router-dom'
-import { Routes } from '@/router/constants'
+import { RouteNames, Routes } from '@/router/constants'
 import { ERROR_MESSAGES } from '../../constants'
 import EditIcon from '@mui/icons-material/Edit'
 import QuestionAnswerOutlinedIcon from '@mui/icons-material/QuestionAnswerOutlined'
+// import BreadCrumbs from '@/components/BreadCrumbs/BreadCrumbs'
 import { FismaTableProps } from '@/types'
 type selectedRowsType = GridRowId[]
 declare module '@mui/x-data-grid' {
@@ -179,11 +179,8 @@ export default function FismaTable({
   const { userInfo } = useContextProp() || EMPTY_USER
   const [selectedRow, setSelectedRow] = useState<FismaSystemType | null>(null)
   const [selectedRows, setSelectedRows] = useState<GridRowId[]>([])
+  const navigate = useNavigate()
   const [openEditModal, setOpenEditModal] = useState<boolean>(false)
-  const handleOpenModal = (row: FismaSystemType) => {
-    setSelectedRow(row)
-    setOpen(true)
-  }
   const handleCloseModal = () => {
     setOpen(false)
     setSelectedRow(null)
@@ -303,17 +300,25 @@ export default function FismaTable({
       renderCell: (params: GridRenderCellParams) => (
         <>
           <Tooltip title="View Questionnare">
-            <GridActionsCellItem
-              icon={<QuestionAnswerOutlinedIcon />}
-              key={`question-${params.row.fismasystemid}`}
-              label="View Questionnare"
-              className="textPrimary"
-              onClick={(event) => {
-                event.stopPropagation()
-                handleOpenModal(params.row as FismaSystemType)
-              }}
-              color="inherit"
-            />
+            <span>
+              <GridActionsCellItem
+                icon={<QuestionAnswerOutlinedIcon />}
+                key={`question-${params.row.fismasystemid}`}
+                label="View Questionnare"
+                className="textPrimary"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  navigate(
+                    `/${RouteNames.QUESTIONNAIRE}/${params.row.fismaacronym.toLowerCase()}`,
+                    {
+                      state: { fismasystemid: params.row.fismasystemid },
+                    }
+                  )
+                  // handleOpenModal(params.row as FismaSystemType)
+                }}
+                color="inherit"
+              />
+            </span>
           </Tooltip>
           {userInfo.role === 'ADMIN' && (
             <GridActionsCellItem
@@ -349,16 +354,6 @@ export default function FismaTable({
           setSelectedRows(selectedIDs)
         }}
         slotProps={{
-          // toolbar: {
-          //   csvOptions: { disableToolbarButton: true },
-          //   printOptions: { disableToolbarButton: true },
-          //   showQuickFilter: true,
-          //   quickFilterProps: {
-          //     debounceMs: 250,
-          //     variant: 'outlined',
-          //     size: 'small',
-          //   },
-          // },
           footer: { selectedRows, fismaSystems, latestDataCallId, scores },
           filterPanel: {
             sx: {
