@@ -90,15 +90,19 @@ export function CustomFooterSaveComponent(
         window.URL.revokeObjectURL(url)
       })
       .catch((error) => {
-        if (error.status === 401 || error.status === 500) {
+        if (error.response.status === 401) {
           navigate(Routes.SIGNIN, {
             replace: true,
             state: {
               message: ERROR_MESSAGES.error,
             },
           })
-        } else if (error.status === 403) {
+        } else if (error.response.status === 403) {
           setErrorMessage(ERROR_MESSAGES.permission)
+          setSnackBarSeverity('warning')
+          setOpenSnackbar(true)
+        } else {
+          setErrorMessage(ERROR_MESSAGES.tryAgain)
           setSnackBarSeverity('warning')
           setOpenSnackbar(true)
         }

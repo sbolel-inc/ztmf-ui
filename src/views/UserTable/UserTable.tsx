@@ -106,7 +106,7 @@ export default function UserTable() {
   const navigate = useNavigate()
   //TODO: add these to a file to be imported and used in multiple places
   const checkValidResponse = (status: number) => {
-    if (status.toString()[0] === '401') {
+    if (status == 401) {
       navigate(Routes.SIGNIN, {
         replace: true,
         state: {
@@ -242,8 +242,8 @@ export default function UserTable() {
     setOpen(false)
   }
   const handleOpenModal = (id: GridRowId) => {
-    setOpenModal(true)
     setUserId(id)
+    setOpenModal(true)
   }
   const handleCloseModal = () => {
     setOpenModal(false)
@@ -266,7 +266,7 @@ export default function UserTable() {
       isNew: false,
       role: newRow.role !== undefined ? newRow.role : selectedRow?.role ?? '',
     } as users
-
+    const curRowUserId = updatedRow.userid
     if (newRow.isNew) {
       axiosInstance
         .post('/users', {
@@ -277,14 +277,25 @@ export default function UserTable() {
         .then((res) => {
           newRow = res.data.data
           updatedRow.userid = newRow.userid
+          apiRef.current.updateRows([
+            { userid: curRowUserId, _action: 'delete' },
+          ])
+          apiRef.current.updateRows([updatedRow])
           setSnackBarSeverity('success')
           setSnackBarText('Saved')
           setOpen(true)
         })
         .catch((error) => {
           console.error('Error updating score:', error)
-          checkValidResponse(error.response.status)
-          handleUnautherized(error.response.status)
+          if (error.response.status === 401) {
+            checkValidResponse(error.response.status)
+          } else if (error.response.status === 403) {
+            handleUnautherized(error.response.status)
+          } else {
+            setSnackBarSeverity('error')
+            setSnackBarText(ERROR_MESSAGES.tryAgain)
+            setOpen(true)
+          }
         })
     } else {
       // const updatedRow = { ...newRow } as users
@@ -301,13 +312,18 @@ export default function UserTable() {
           setOpen(true)
         })
         .catch((error) => {
-          checkValidResponse(error.response.status)
-          handleUnautherized(error.response.status)
+          if (error.response.status === 401) {
+            checkValidResponse(error.response.status)
+          } else if (error.response.status === 403) {
+            handleUnautherized(error.response.status)
+          } else {
+            setSnackBarSeverity('error')
+            setSnackBarText(ERROR_MESSAGES.tryAgain)
+            setOpen(true)
+          }
         })
     }
-    setRows(
-      rows.map((row) => (row.userid === newRow.userid ? updatedRow : row))
-    )
+    setRows(rows.map((row) => (row.userid === curRowUserId ? updatedRow : row)))
     return updatedRow
   }
   const handleRowModesModelChange = (newRowModesModel: GridRowModesModel) => {
@@ -321,25 +337,38 @@ export default function UserTable() {
 
   // TODO: Custom hook for fetching data
   useEffect(() => {
-    axiosInstance.get('/users').then((res) => {
-      if (res.status === 200) {
-        const data = res.data.data.map((row: users) => ({
-          ...row,
-          role: row.role.trim(),
-        }))
-        setRows(data)
-        const map: Record<number, string> = {}
-        for (const obj of fismaSystems) {
-          map[obj.fismasystemid] = obj.fismasubsystem
-            ? obj.fismaname + ' - ' + obj.fismasubsystem
-            : obj.fismaname
+    axiosInstance
+      .get('/users')
+      .then((res) => {
+        if (res.status === 200) {
+          const data = res.data.data.map((row: users) => ({
+            ...row,
+            role: row.role.trim(),
+          }))
+          setRows(data)
+          const map: Record<number, string> = {}
+          for (const obj of fismaSystems) {
+            map[obj.fismasystemid] = obj.fismasubsystem
+              ? obj.fismaname + ' - ' + obj.fismasubsystem
+              : obj.fismaname
+          }
+          setFismaSystemsMap(map)
+        } else {
+          return
         }
-        setFismaSystemsMap(map)
-      } else {
-        return
-      }
-    })
-  }, [fismaSystems])
+      })
+      .catch((error) => {
+        if (error.response.status === 401) {
+          checkValidResponse(error.response.status)
+        } else if (error.response.status === 403) {
+          handleUnautherized(error.response.status)
+        } else {
+          setSnackBarSeverity('error')
+          setSnackBarText(ERROR_MESSAGES.tryAgain)
+          setOpen(true)
+        }
+      })
+  }, [fismaSystems, navigate, checkValidResponse])
   const columns: GridColDef[] = [
     {
       field: 'fullname',
