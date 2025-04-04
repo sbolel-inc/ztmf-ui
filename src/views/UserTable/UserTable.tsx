@@ -8,6 +8,7 @@ import CancelIcon from '@mui/icons-material/Close'
 import FormControl from '@mui/material/FormControl'
 import Select from '@mui/material/Select'
 import MenuItem from '@mui/material/MenuItem'
+import DeleteIcon from '@mui/icons-material/DeleteOutlined'
 import {
   GridRowsProp,
   GridRowModesModel,
@@ -39,6 +40,7 @@ import { users } from '@/types'
 import { useContextProp } from '../Title/Context'
 import Box from '@mui/material/Box'
 import CustomSnackbar from '../Snackbar/Snackbar'
+import { useSnackbar } from 'notistack'
 import AssignSystemModal from '../AssignSystemModal/AssignSystemModal'
 import { useNavigate } from 'react-router-dom'
 import { Routes } from '@/router/constants'
@@ -62,10 +64,9 @@ function EditToolbar(props: EditToolbarProps) {
     ])
     setRowModesModel((oldModel) => ({
       ...oldModel,
-      [userid]: { mode: GridRowModes.Edit, fieldToFocus: 'name' },
+      [userid]: { mode: GridRowModes.Edit, fieldToFocus: 'fullname' },
     }))
   }
-
   return (
     <GridToolbarContainer sx={{ justifyContent: 'space-between' }}>
       <GridToolbarQuickFilter
@@ -104,6 +105,7 @@ function validateEmail(email: string) {
 export default function UserTable() {
   const apiRef = useGridApiRef()
   const navigate = useNavigate()
+  const { enqueueSnackbar } = useSnackbar()
   //TODO: add these to a file to be imported and used in multiple places
   const checkValidResponse = (status: number) => {
     if (status == 401) {
@@ -204,9 +206,13 @@ export default function UserTable() {
   }
   const handleUnautherized = (errorStatus: number) => {
     if (errorStatus === 403) {
-      setSnackBarSeverity('error')
-      setSnackBarText('You are not authorized to perform this action')
-      setOpen(true)
+      enqueueSnackbar(ERROR_MESSAGES.permission, {
+        variant: 'error',
+        anchorOrigin: {
+          vertical: 'top',
+          horizontal: 'left',
+        },
+      })
     }
   }
   const handleEditClick = (id: GridRowId) => () => {
@@ -334,7 +340,38 @@ export default function UserTable() {
     setSnackBarText('An error occurred while saving the row')
     setOpen(true)
   }
-
+  const handleDeleteClick = (id: GridRowId) => () => {
+    const curRow = apiRef.current.getRow(id)
+    setRows(rows.filter((row) => row.userid !== id))
+    axiosInstance
+      .delete(`/users/${id}`)
+      .then(() => {
+        enqueueSnackbar(`Saved - Delete User ${curRow.fullname}`, {
+          variant: 'success',
+          anchorOrigin: {
+            vertical: 'top',
+            horizontal: 'left',
+          },
+          autoHideDuration: 2000,
+        })
+      })
+      .catch((error) => {
+        if (error.response.status === 401) {
+          checkValidResponse(error.response.status)
+        } else if (error.response.status === 403) {
+          handleUnautherized(error.response.status)
+        } else {
+          enqueueSnackbar(`An error occurred, please try again later`, {
+            variant: 'success',
+            anchorOrigin: {
+              vertical: 'top',
+              horizontal: 'left',
+            },
+            autoHideDuration: 2000,
+          })
+        }
+      })
+  }
   // TODO: Custom hook for fetching data
   useEffect(() => {
     axiosInstance
@@ -358,17 +395,33 @@ export default function UserTable() {
         }
       })
       .catch((error) => {
+        console.log(error)
         if (error.response.status === 401) {
-          checkValidResponse(error.response.status)
+          navigate(Routes.SIGNIN, {
+            replace: true,
+            state: {
+              message: ERROR_MESSAGES.notSaved,
+            },
+          })
         } else if (error.response.status === 403) {
-          handleUnautherized(error.response.status)
+          enqueueSnackbar(ERROR_MESSAGES.permission, {
+            variant: 'error',
+            anchorOrigin: {
+              vertical: 'top',
+              horizontal: 'left',
+            },
+          })
         } else {
-          setSnackBarSeverity('error')
-          setSnackBarText(ERROR_MESSAGES.tryAgain)
-          setOpen(true)
+          enqueueSnackbar(ERROR_MESSAGES.tryAgain, {
+            variant: 'error',
+            anchorOrigin: {
+              vertical: 'top',
+              horizontal: 'left',
+            },
+          })
         }
       })
-  }, [fismaSystems, navigate, checkValidResponse])
+  }, [fismaSystems, navigate, enqueueSnackbar])
   const columns: GridColDef[] = [
     {
       field: 'fullname',
@@ -425,8 +478,9 @@ export default function UserTable() {
       headerName: 'Actions',
       width: 100,
       cellClassName: 'actions',
-      getActions: ({ id }) => {
-        const isInEditMode = rowModesModel[id]?.mode === GridRowModes.Edit
+      getActions: (params) => {
+        const isInEditMode =
+          rowModesModel[params.id]?.mode === GridRowModes.Edit
         if (isInEditMode) {
           return [
             <GridActionsCellItem
@@ -435,15 +489,15 @@ export default function UserTable() {
               sx={{
                 color: 'primary.main',
               }}
-              key={`save-${id}`}
-              onClick={handleSaveClick(id)}
+              key={`save-${params.id}`}
+              onClick={handleSaveClick(params.id)}
             />,
             <GridActionsCellItem
               icon={<CancelIcon />}
-              key={`cancel-${id}`}
+              key={`cancel-${params.id}`}
               label="Cancel"
               className="textPrimary"
-              onClick={handleCancelClick(id)}
+              onClick={handleCancelClick(params.id)}
               color="inherit"
             />,
           ]
@@ -452,25 +506,32 @@ export default function UserTable() {
         return [
           <GridActionsCellItem
             icon={<EditIcon />}
-            key={`edit-${id}`}
+            key={`edit-${params.id}`}
             label="Edit"
             className="textPrimary"
-            onClick={handleEditClick(id)}
+            onClick={handleEditClick(params.id)}
             color="inherit"
           />,
           <Tooltip
             title={`Assign Fisma Systems`}
-            key={`tooltip-${id}`}
+            key={`tooltip-${params.id}`}
             placement="right-start"
           >
             <GridActionsCellItem
-              icon={<ChecklistIcon />}
-              key={id}
+              icon={<ChecklistIcon sx={{ color: 'black' }} />}
+              key={`assignsystem-${params.id}`}
               label="assignedSystems"
-              onClick={() => handleOpenModal(id)}
+              onClick={() => handleOpenModal(params.id)}
               color="inherit"
             />
           </Tooltip>,
+          <GridActionsCellItem
+            key={`delete-${params.id}`}
+            icon={<DeleteIcon sx={{ color: 'black' }} />}
+            label="Delete"
+            onClick={handleDeleteClick(params.id)}
+            color="inherit"
+          />,
         ]
       },
     },
