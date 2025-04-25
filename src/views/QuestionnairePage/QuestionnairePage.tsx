@@ -16,6 +16,7 @@ import {
   Question,
   QuestionChoice,
   QuestionScores,
+  functionScores,
 } from '@/types'
 import { Container, styled } from '@mui/system'
 import axiosInstance from '@/axiosConfig'
@@ -84,9 +85,11 @@ export default function QuestionnarePage() {
   const [openAlert, setOpenAlert] = React.useState<boolean>(false)
   const [options, setOptions] = React.useState<QuestionChoice[]>([])
   const [questions, setQuestions] = React.useState<Record<number, Question>>([])
+  const [functionScores, setFunctionScores] = React.useState<functionScores>({})
   const [question, setQuestion] = React.useState<string>('')
   const [datacallID, setDatacallID] = React.useState<number>(0)
-  const [dataCall, setDataCall] = React.useState<string>('')
+  const [datacall, setDatacall] = React.useState<string>('')
+  // const { latestDatacall, latestDatacallId } = useContextProp()
   const [loadingQuestion, setLoadingQuestion] = React.useState<boolean>(true)
   const [categories, setCategories] = React.useState<Category[]>([])
   const [stepFunctionId, setStepFunctionId] = React.useState<number[]>([])
@@ -108,7 +111,7 @@ export default function QuestionnarePage() {
   ) => {
     try {
       const response = await axiosInstance.get(
-        `scores?datacallid=${datacallID}&fismasystemid=${systemId}`
+        `scores?datacallid=${datacallID}&fismasystemid=${systemId}&include=functionoption`
       )
       const hashTable: questionScoreMap = Object.assign(
         {},
@@ -151,6 +154,7 @@ export default function QuestionnarePage() {
   const navigate = useNavigate()
   const location = useLocation()
   const { fismaacronym } = useParams()
+
   const system = location.state.fismasystemid
   const [selectedIndex, setSelectedIndex] = React.useState(1)
   const handleConfirmReturn = (confirm: boolean) => {
@@ -189,17 +193,27 @@ export default function QuestionnarePage() {
         })
         .catch((error) => {
           console.error('Error updating score:', error)
+          if (error.status === 401) {
+            routeToSignIn()
+          }
           if (error.response.status === 403) {
-            enqueueSnackbar(`Unauthorized`, {
+            enqueueSnackbar(error.response.data.error, {
               variant: 'error',
               anchorOrigin: {
                 vertical: 'top',
                 horizontal: 'left',
               },
-              autoHideDuration: 1500,
+              autoHideDuration: 2500,
             })
           } else {
-            routeToSignIn()
+            enqueueSnackbar(ERROR_MESSAGES.tryAgain, {
+              variant: 'error',
+              anchorOrigin: {
+                vertical: 'top',
+                horizontal: 'left',
+              },
+              autoHideDuration: 2500,
+            })
           }
         })
     } else {
@@ -223,17 +237,26 @@ export default function QuestionnarePage() {
         })
         .catch((error) => {
           console.error('Error posting score:', error)
-          if (error.response.status === 403) {
-            enqueueSnackbar(`Unauthorized`, {
+          if (error.status === 401) {
+            routeToSignIn()
+          } else if (error.status === 403) {
+            enqueueSnackbar(error.response.data.error, {
               variant: 'error',
               anchorOrigin: {
                 vertical: 'top',
                 horizontal: 'left',
               },
-              autoHideDuration: 1500,
+              autoHideDuration: 2500,
             })
           } else {
-            routeToSignIn()
+            enqueueSnackbar(ERROR_MESSAGES.tryAgain, {
+              variant: 'error',
+              anchorOrigin: {
+                vertical: 'top',
+                horizontal: 'left',
+              },
+              autoHideDuration: 2500,
+            })
           }
         })
     }
@@ -249,11 +272,11 @@ export default function QuestionnarePage() {
             .then((res) => {
               setDatacallID(res.data.data.datacallid)
               datacall = res.data.data.datacall.replace(' ', '_')
-              setDataCall(res.data.data.datacall.replace(' ', '_'))
+              setDatacall(datacall)
               return res.data.data.datacallid
             })
             .catch((error) => {
-              if (error.status === 401) {
+              if (error.response.status === 401) {
                 navigate(Routes.SIGNIN, {
                   replace: true,
                   state: {
@@ -368,16 +391,16 @@ export default function QuestionnarePage() {
                     message: ERROR_MESSAGES.expired,
                   },
                 })
-              } else if (error.response.status === 403) {
+              } else if (error.status === 403) {
                 enqueueSnackbar(
-                  `You don't have permission to get the questions`,
+                  `You don't have permission to the questions of this fismasystem`,
                   {
                     variant: 'error',
                     anchorOrigin: {
                       vertical: 'top',
                       horizontal: 'left',
                     },
-                    autoHideDuration: 2500,
+                    autoHideDuration: 3000,
                   }
                 )
               } else {
@@ -387,25 +410,33 @@ export default function QuestionnarePage() {
                     vertical: 'top',
                     horizontal: 'left',
                   },
-                  autoHideDuration: 2500,
+                  autoHideDuration: 3000,
                 })
               }
             })
           await axiosInstance
             .get(
-              `scores?datacallid=${latestDataCallId}&fismasystemid=${system}`
+              `scores?datacallid=${latestDataCallId}&fismasystemid=${system}&include=functionoption`
             )
             .then((res) => {
+              const funcScoreTable = {}
+              const questionScoreMap: questionScoreMap = {}
               const hashTable: questionScoreMap = Object.assign(
                 {},
                 ...res.data.data.map((item: QuestionScores) => ({
                   [item.functionoptionid]: item,
                 }))
               )
+              // res.data.data.map((item: any) => {
+              //   questionScoreMap[item.functionoptionid] = item
+              //   funcScoreTable
+              // })
+              console.log(hashTable)
               setQuestionScores(hashTable)
             })
             .catch((error) => {
-              if (error.status === 401) {
+              console.error('Error fetching ´question scores:', error)
+              if (error.response.status === 401) {
                 navigate(Routes.SIGNIN, {
                   replace: true,
                   state: {
@@ -413,14 +444,17 @@ export default function QuestionnarePage() {
                   },
                 })
               } else if (error.response.status === 403) {
-                enqueueSnackbar(`You don't have permission to get the scores`, {
-                  variant: 'error',
-                  anchorOrigin: {
-                    vertical: 'top',
-                    horizontal: 'left',
-                  },
-                  autoHideDuration: 1500,
-                })
+                enqueueSnackbar(
+                  `You don't have permission get the scores for this system`,
+                  {
+                    variant: 'error',
+                    anchorOrigin: {
+                      vertical: 'top',
+                      horizontal: 'left',
+                    },
+                    autoHideDuration: 3000,
+                  }
+                )
               } else {
                 enqueueSnackbar(ERROR_MESSAGES.tryAgain, {
                   variant: 'error',
@@ -428,7 +462,7 @@ export default function QuestionnarePage() {
                     vertical: 'top',
                     horizontal: 'left',
                   },
-                  autoHideDuration: 1500,
+                  autoHideDuration: 3000,
                 })
               }
             })
@@ -536,6 +570,7 @@ export default function QuestionnarePage() {
                         : pillar.name.toUpperCase()}
                     </ListSubheader>
                     {pillar.steps.map((func) => {
+                      // console.log(func)
                       const text = addSpace(func.function.function)
                       const customFontSize =
                         text.length > 33 ? '0.9rem' : '1rem'
@@ -557,7 +592,7 @@ export default function QuestionnarePage() {
                                 setOpenAlert(true)
                               } else {
                                 navigate(
-                                  `/${RouteNames.QUESTIONNAIRE}/${fismaacronym?.toLowerCase()}/${dataCall}/${pillar.name === 'CrossCutting' ? 'cross-cutting' : pillar.name.toLowerCase()}/${func.function.function.toLowerCase()}`,
+                                  `/${RouteNames.QUESTIONNAIRE}/${fismaacronym?.toLowerCase()}/${datacall}/${pillar.name === 'CrossCutting' ? 'cross-cutting' : pillar.name.toLowerCase()}/${func.function.function.toLowerCase()}`,
                                   {
                                     state: { fismasystemid: system },
                                     replace: true,
@@ -587,7 +622,6 @@ export default function QuestionnarePage() {
                   color: '#5a5a5a',
                   mb: 0,
                   borderRadius: 1,
-                  // backgroundColor: 'rgb(217, 217, 217)',
                 }}
               >
                 {description}
@@ -645,7 +679,7 @@ export default function QuestionnarePage() {
                           if (questions[id]) {
                             const q = questions[id]
                             navigate(
-                              `/${RouteNames.QUESTIONNAIRE}/${fismaacronym?.toLowerCase()}/${dataCall}/${q.pillar === 'CrossCutting' ? 'cross-cutting' : q.pillar.toLowerCase()}/${q.function.toLowerCase()}`,
+                              `/${RouteNames.QUESTIONNAIRE}/${fismaacronym?.toLowerCase()}/${datacall}/${q.pillar === 'CrossCutting' ? 'cross-cutting' : q.pillar.toLowerCase()}/${q.function.toLowerCase()}`,
                               {
                                 state: { fismasystemid: system },
                                 replace: true,
@@ -675,7 +709,7 @@ export default function QuestionnarePage() {
                         if (questions[id]) {
                           const q = questions[id]
                           navigate(
-                            `/${RouteNames.QUESTIONNAIRE}/${fismaacronym?.toLowerCase()}/${dataCall}/${q.pillar === 'CrossCutting' ? 'cross-cutting' : q.pillar.toLowerCase()}/${q.function.toLowerCase()}`,
+                            `/${RouteNames.QUESTIONNAIRE}/${fismaacronym?.toLowerCase()}/${datacall}/${q.pillar === 'CrossCutting' ? 'cross-cutting' : q.pillar.toLowerCase()}/${q.function.toLowerCase()}`,
                             {
                               state: { fismasystemid: system },
                               replace: true,

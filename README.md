@@ -20,7 +20,7 @@ This project contains the application's UI built with React, Vite, TypeScript, a
 
 ## CI/CD Workflows
 
-The project uses GitHub Actions for continuous integration and deployment. The workflows are organized into modular components that are orchestrated differently for development and production environments. GitHub Secrets secures sensitive values, and authentication to AWS is provided via OIDC to an IAM IDP.
+The project uses GitHub Actions for continuous integration and deployment. The workflows are organized into modular components that are orchestrated differently for development and production environments.
 
 ### Workflow Components
 
@@ -29,7 +29,7 @@ The project uses GitHub Actions for continuous integration and deployment. The w
    - Performs code quality and security checks
    - Lints Go code using staticcheck
    - Lints Terraform code using tflint
-   - Runs Snyk security scans for vulnerabilities within dependencies and frontend code
+   - Runs Snyk security scans for Go code, source code, and infrastructure as code
 
 2. **ui (`ui.yml`)**
    - DEBUG - node, npm, yarn versions

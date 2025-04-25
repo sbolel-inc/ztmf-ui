@@ -52,6 +52,10 @@ export type FismaSystems = {
   fismaSystems: FismaSystemType[]
 }
 
+export type functionScores = {
+  [key: number]: number
+}
+
 export type FismaFunction = {
   functionid: number
   function: string
@@ -165,7 +169,7 @@ export type FormValidHelperText = {
 
 export type FismaTableProps = {
   scores: Record<number, number>
-  // latestDataCallId: number
+  latestDataCallId: number
 }
 
 export type ThemeColor =
